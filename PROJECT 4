@@ -1,0 +1,59 @@
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.decomposition import TruncatedSVD
+from sklearn.metrics.pairwise import cosine_similarity
+from gensim.models import Word2Vec
+from sentence_transformers import SentenceTransformer
+
+corpus = [
+    "معامله‌گری در بازارهای مالی نیازمند درک عمیق از احتمالات و آمار است.",
+    "تحلیل تکنیکال بر اساس پرایس اکشن یکی از روش‌های محبوب معامله‌گری است.",
+    "یادگیری ماشین و هوش مصنوعی در پردازش زبان‌های طبیعی کاربرد دارند.",
+    "مدیریت ریسک و سرمایه در استراتژی‌های معاملاتی نقش حیاتی ایفا می‌کند.",
+    "مدل‌های زبانی بزرگ می‌توانند متون فارسی را به خوبی درک کنند."
+]
+
+print("--- مرحله ۱: برداری‌سازی (Vectorization) ---")
+
+tfidf_vectorizer = TfidfVectorizer()
+tfidf_matrix = tfidf_vectorizer.fit_transform(corpus)
+print(f"ابعاد ماتریس TF-IDF: {tfidf_matrix.shape}")
+
+tokenized_corpus = [doc.split() for doc in corpus]
+w2v_model = Word2Vec(sentences=tokenized_corpus, vector_size=100, window=5, min_count=1)
+
+def get_sentence_embedding_w2v(text, model):
+    words = text.split()
+    vectors = [model.wv[word] for word in words if word in model.wv]
+    if not vectors:
+        return np.zeros(model.vector_size)
+    return np.mean(vectors, axis=0)
+
+w2v_matrix = np.array([get_sentence_embedding_w2v(s, w2v_model) for s in corpus])
+print(f"ابعاد ماتریس Word2Vec: {w2v_matrix.shape}")
+
+model_st = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
+embedding_matrix = model_st.encode(corpus)
+print(f"ابعاد ماتریس Embedding: {embedding_matrix.shape}\n")
+
+
+print("--- بخش الف: کاهش بعد SVD (روی TF-IDF) ---")
+svd = TruncatedSVD(n_components=2)
+tfidf_reduced = svd.fit_transform(tfidf_matrix)
+
+print(f"ابعاد ماتریس TF-IDF بعد از کاهش بعد: {tfidf_reduced.shape}")
+print("نمونه مقادیر کاهش یافته (سطر اول):", tfidf_reduced[0], "\n")
+
+
+print("--- بخش ب: محاسبه شباهت معنایی (بین تمام جملات) ---")
+sim_matrix = cosine_similarity(embedding_matrix)
+
+print("ماتریس شباهت (جمله اول با بقیه):")
+for i, score in enumerate(sim_matrix[0]):
+    print(f"شباهت جمله ۱ با جمله {i+1}: {score:.4f}")
+
+print("\n--- تحلیل نهایی روش‌ها ---")
+print("۱. TF-IDF: برای جستجوی کلمات کلیدی عالی است اما معنای کلمات مترادف را نمی‌فهمد.")
+print("۲. Word2Vec: روابط بین کلمات را می‌فهمد اما با میانگین‌گیری، ترتیب و ساختار جمله را از دست می‌دهد.")
+print("۳. Embedding (Transformer): بهترین روش است؛ زیرا کلمات را در متن (Context) درک کرده و")
+print("   حتی اگر دو جمله کلمات مشترک نداشته باشند اما هم‌معنی باشند، شباهت بالایی تشخیص می‌دهد.")
