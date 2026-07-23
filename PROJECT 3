@@ -1,0 +1,67 @@
+import numpy as np
+import networkx as nx
+
+
+def pagerank_optimized(adj_matrix: np.ndarray, d: float = 0.85,
+                       tol: float = 1.0e-8, max_iter: int = 100):
+    """
+    پیاده‌سازی بهینه الگوریتم PageRank با استفاده از محاسبات ماتریسی.
+
+    Parameters:
+    - adj_matrix: ماتریس مجاورت (n x n) - adj[i, j] = 1 اگر از j به i لینک باشد.
+    - d: فاکتور میرایی (Damping Factor)
+    - tol: آستانه همگرایی (Tolerance)
+    - max_iter: حداکثر تعداد تکرار
+    """
+    n = adj_matrix.shape[0]
+    if n == 0:
+        return np.array([])
+
+
+    out_degree = np.sum(adj_matrix, axis=0)
+
+
+    with np.errstate(divide='ignore', invalid='ignore'):
+        stochastic_matrix = adj_matrix / out_degree
+        stochastic_matrix[:, out_degree == 0] = 1.0 / n
+
+
+    v = np.ones(n) / n
+
+    teleport = np.ones(n) / n
+
+    for i in range(max_iter):
+        v_next = d * np.dot(stochastic_matrix, v) + (1 - d) * teleport
+
+        err = np.linalg.norm(v_next - v, ord=1)
+        if err < tol:
+            print(f"Converged in {i + 1} iterations.")
+            return v_next
+
+        v = v_next
+
+    print("Warning: Did not converge within max_iter.")
+    return v
+
+
+
+def run_example():
+    edges = [(0, 1), (0, 2), (1, 2), (2, 0), (3, 2)]
+    n_nodes = 4
+
+    adj = np.zeros((n_nodes, n_nodes))
+    for u, v in edges:
+        adj[v, u] = 1
+
+    custom_ranks = pagerank_optimized(adj)
+
+    G = nx.DiGraph(edges)
+    nx_ranks = nx.pagerank(G, alpha=0.85)
+
+    print("\n--- Results Comparison ---")
+    for i in range(n_nodes):
+        print(f"Node {i}: Custom={custom_ranks[i]:.5f}, NetworkX={nx_ranks.get(i, 0):.5f}")
+
+
+if __name__ == "__main__":
+    run_example()
