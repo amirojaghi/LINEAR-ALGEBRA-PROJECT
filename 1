@@ -1,0 +1,89 @@
+import streamlit as st
+import numpy as np
+from PIL import Image
+import io
+
+
+def compress_channel(channel_matrix, k):
+    """
+    استاندارد SVD اعمال تجزیه بر روی یک ماتریس دو بعدی
+    """
+    U, S, Vt = np.linalg.svd(channel_matrix, full_matrices=False)
+    # بازسازی ماتریس با استفاده از k مولفه برتر
+    compressed_channel = np.dot(U[:, :k], np.dot(np.diag(S[:k]), Vt[:k, :]))
+    return compressed_channel
+
+
+def main():
+    st.set_page_config(page_title="SVD Image Compressor", layout="wide")
+
+    st.title("🖼️ ابزار فشرده‌سازی تصویر با روش SVD")
+    st.write("این اپلیکیشن تصویر را با استفاده از تجزیه مقادیر منفرد فشرده می‌کند.")
+
+    uploaded_file = st.file_uploader("تصویر خود را انتخاب کنید (JPG, PNG, JPEG)", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file).convert("RGB")
+        img_array = np.array(image, dtype=float)
+        height, width, channels = img_array.shape
+        max_k = min(height, width)
+
+        st.success("فایل با موفقیت بارگذاری شد.")
+
+        col_settings, col_info = st.columns(2)
+
+        with col_settings:
+            mode = st.radio("روش تعیین میزان فشرده‌سازی:", ("تعداد مولفه‌ها (k)", "درصد نگهداری داده‌ها"))
+
+            if mode == "تعداد مولفه‌ها (k)":
+                k_value = st.slider("تعداد (k):", 1, max_k, int(max_k * 0.1))
+            else:
+                percentage = st.slider("درصد نگهداری (0-100%):", 1, 100, 10)
+                k_value = max(1, int((percentage / 100) * max_k))
+
+        with col_info:
+            st.info(
+                f"ابعاد تصویر: {width}x{height}\n\nتعداد کل مولفه‌های ممکن: {max_k}\n\nمولفه‌های انتخابی برای بازسازی: {k_value}")
+
+        if st.button("شروع فرآیند فشرده‌سازی"):
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            compressed_img_array = np.zeros_like(img_array)
+
+            for i in range(3):
+                status_text.text(f"در حال پردازش کانال {['Red', 'Green', 'Blue'][i]}...")
+                compressed_img_array[:, :, i] = compress_channel(img_array[:, :, i], k_value)
+                progress_bar.progress((i + 1) * 33)
+
+            compressed_img_array = np.clip(compressed_img_array, 0, 255).astype(np.uint8)
+            compressed_image = Image.fromarray(compressed_img_array)
+
+            status_text.text("پردازش کامل شد!")
+            progress_bar.empty()
+
+            st.divider()
+            col_orig, col_comp = st.columns(2)
+
+            with col_orig:
+                st.subheader("تصویر اصلی")
+                st.image(image, use_container_width=True)
+
+            with col_comp:
+                st.subheader("تصویر فشرده شده")
+                st.image(compressed_image, use_container_width=True)
+
+            buf = io.BytesIO()
+            compressed_image.save(buf, format="JPEG")
+            byte_im = buf.getvalue()
+
+            st.download_button(
+                label="📥 دانلود تصویر فشرده شده",
+                data=byte_im,
+                file_name="compressed_svd_image.jpg",
+                mime="image/jpeg"
+            )
+
+
+if __name__ == "__main__":
+    main()
